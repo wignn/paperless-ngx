@@ -1100,6 +1100,60 @@ export class DocumentDetailComponent
       })
   }
 
+  convertToWord() {
+    if (this.document?.mime_type !== 'application/pdf') {
+      this.toastService.showError(
+        $localize`Only PDF documents can be converted to Word`
+      )
+      return
+    }
+
+    this.downloading = true
+    const convertUrl = this.documentsService.getConvertToWordUrl(
+      this.documentId,
+      'eng', // default language, bisa diubah sesuai kebutuhan
+      300,   // default DPI
+      true,  // include images
+      false  // layout detection
+    )
+
+    this.http
+      .get(convertUrl, { observe: 'response', responseType: 'blob' })
+      .subscribe({
+        next: (response: HttpResponse<Blob>) => {
+          const contentDisposition = response.headers.get('Content-Disposition')
+          const filename =
+            getFilenameFromContentDisposition(contentDisposition) ||
+            `${this.document.title}.docx`
+          const blob = new Blob([response.body], {
+            type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          })
+          this.downloading = false
+
+          const url = URL.createObjectURL(blob)
+          const a = document.createElement('a')
+          a.href = url
+          a.download = filename
+          a.click()
+          URL.revokeObjectURL(url)
+
+          this.toastService.showInfo(
+            $localize`Document converted to Word successfully`
+          )
+        },
+        error: (error) => {
+          this.downloading = false
+          let errorMessage = $localize`Error converting document to Word`
+          if (error.status === 400) {
+            errorMessage = $localize`Only PDF documents can be converted to Word`
+          } else if (error.status === 500) {
+            errorMessage = $localize`Server error: Conversion feature may not be installed`
+          }
+          this.toastService.showError(errorMessage, error)
+        },
+      })
+  }
+
   hasNext() {
     return this.documentListViewService.hasNext(this.documentId)
   }

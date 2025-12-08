@@ -184,6 +184,23 @@ export class DocumentService extends AbstractPaperlessService<Document> {
     return url
   }
 
+  getConvertToWordUrl(
+    id: number,
+    ocrLanguage: string = 'eng',
+    dpi: number = 300,
+    includeImages: boolean = true,
+    layoutDetection: boolean = false
+  ): string {
+    let url = this.getResourceUrl(id, 'convert-to-word')
+    const params = new URLSearchParams({
+      ocr_language: ocrLanguage,
+      dpi: dpi.toString(),
+      include_images: includeImages.toString(),
+      layout_detection: layoutDetection.toString(),
+    })
+    return `${url}?${params.toString()}`
+  }
+
   getNextAsn(): Observable<number> {
     return this.http.get<number>(this.getResourceUrl(null, 'next_asn'))
   }

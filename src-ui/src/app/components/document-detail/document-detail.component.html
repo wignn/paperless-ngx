@@ -62,6 +62,10 @@
         <i-bs width="1em" height="1em" name="diagram-3"></i-bs>&nbsp;<span i18n>More like this</span>
       </button>
 
+      <button ngbDropdownItem (click)="convertToWord()" [disabled]="downloading || document?.mime_type !== 'application/pdf'">
+        <i-bs width="1em" height="1em" name="file-earmark-word"></i-bs>&nbsp;<span i18n>Convert to Word</span>
+      </button>
+
       <button ngbDropdownItem (click)="editPdf()" [disabled]="!userIsOwner || !userCanEdit || originalContentRenderType !== ContentRenderType.PDF">
         <i-bs name="pencil"></i-bs>&nbsp;<ng-container i18n>PDF Editor</ng-container>
       </button>

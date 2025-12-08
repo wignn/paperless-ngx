@@ -972,6 +972,107 @@ class DocumentViewSet(
         except (FileNotFoundError, Document.DoesNotExist):
             raise Http404
 
+    @action(methods=["get"], detail=True, url_path="convert-to-word")
+    def convert_to_word(self, request, pk=None):
+        """
+        Convert a PDF document to Word format with OCR
+        
+        Query parameters:
+        - ocr_language: Language code for OCR (default: eng)
+        - dpi: DPI for image conversion (default: 300)
+        - include_images: Include images in Word doc (default: true)
+        - layout_detection: Use layout detection (default: false)
+        """
+        try:
+            doc = Document.objects.get(pk=pk)
+            
+            # Check permissions
+            if not has_perms_owner_aware(request.user, "view_document", doc):
+                return HttpResponseForbidden("Insufficient permissions")
+            
+            # Check if document is a PDF
+            if doc.mime_type != "application/pdf":
+                return HttpResponseBadRequest(
+                    "Only PDF documents can be converted to Word"
+                )
+            
+            # Import converter
+            from documents.pdf_to_word_converter import (
+                PdfToWordConverter,
+                is_conversion_available,
+            )
+            
+            if not is_conversion_available():
+                return HttpResponseServerError(
+                    "PDF to Word conversion is not available. "
+                    "Please install required dependencies."
+                )
+            
+            # Get parameters
+            ocr_language = request.query_params.get("ocr_language", "eng")
+            dpi = int(request.query_params.get("dpi", 300))
+            include_images = request.query_params.get("include_images", "true").lower() in ["true", "1"]
+            layout_detection = request.query_params.get("layout_detection", "false").lower() in ["true", "1"]
+            
+            # Get document file path
+            if doc.has_archive_version:
+                source_path = doc.archive_path
+            else:
+                source_path = doc.source_path
+            
+            # Create temporary output file
+            with tempfile.NamedTemporaryFile(
+                suffix=".docx",
+                delete=False,
+            ) as tmp_output:
+                output_path = Path(tmp_output.name)
+            
+            try:
+                # Convert PDF to Word
+                converter = PdfToWordConverter(ocr_language=ocr_language)
+                
+                if layout_detection:
+                    converter.convert_with_layout_detection(
+                        pdf_path=Path(source_path),
+                        output_path=output_path,
+                        dpi=dpi,
+                    )
+                else:
+                    converter.convert_pdf_to_word(
+                        pdf_path=Path(source_path),
+                        output_path=output_path,
+                        dpi=dpi,
+                        include_images=include_images,
+                    )
+                
+                # Read the converted file
+                with open(output_path, "rb") as f:
+                    response = HttpResponse(
+                        f.read(),
+                        content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    )
+                    
+                    # Set filename
+                    filename = f"{doc.title}.docx"
+                    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+                    
+                    return response
+                    
+            finally:
+                # Clean up temporary file
+                if output_path.exists():
+                    output_path.unlink()
+                    
+        except Document.DoesNotExist:
+            raise Http404
+        except ValueError as e:
+            return HttpResponseBadRequest(str(e))
+        except Exception as e:
+            logger.error(f"Failed to convert PDF to Word: {e}")
+            return HttpResponseServerError(
+                f"Failed to convert document: {str(e)}"
+            )
+
     @action(
         methods=["get", "post", "delete"],
         detail=True,
